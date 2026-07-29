@@ -13,7 +13,8 @@ public enum CardTheme
     DeepSpace,
     MinimalLight,
     NeonPurple,
-    AmberTerminal
+    AmberTerminal,
+    DeepSpaceOrange
 }
 
 public sealed class AppSettings

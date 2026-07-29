@@ -1,6 +1,9 @@
 using LinxDisplay.Core;
 using LinxDisplay.Rendering;
 using SkiaSharp;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
 using System.Text.Json;
 
 var checks = new List<(string Name, Action Run)>();
@@ -100,6 +103,12 @@ checks.Add(("Platform system monitor", () =>
     Assert(sample.TotalMemoryBytes > 0, "未读取到系统内存");
 }));
 
+checks.Add(("Image API retries a transient connection failure",
+    () => TestTransientImageApiConnectionAsync().GetAwaiter().GetResult()));
+
+checks.Add(("Keyboard API address is discovered and updated",
+    () => TestKeyboardEndpointDiscoveryAsync().GetAwaiter().GetResult()));
+
 var failures = 0;
 foreach (var check in checks)
 {
@@ -130,7 +139,64 @@ static void AssertJpeg(byte[] data)
         $"图片尺寸错误：{bitmap.Width}×{bitmap.Height}");
 }
 
+static async Task TestTransientImageApiConnectionAsync()
+{
+    using var reservation = new TcpListener(IPAddress.Loopback, 0);
+    reservation.Start();
+    var port = ((IPEndPoint)reservation.LocalEndpoint).Port;
+    reservation.Stop();
+    using var listener = new TcpListener(IPAddress.Loopback, port);
+
+    var server = Task.Run(async () =>
+    {
+        await Task.Delay(750);
+        listener.Start();
+        using var client = await listener.AcceptTcpClientAsync();
+        await using var stream = client.GetStream();
+        var buffer = new byte[4096];
+        await stream.ReadAtLeastAsync(buffer, 1);
+        await stream.WriteAsync(
+            "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"u8.ToArray());
+    });
+
+    using var api = new ImageApiClient();
+    var retryCount = 0;
+    var retryProgress = new Progress<int>(_ => Interlocked.Increment(ref retryCount));
+    var status = await api.UploadAsync([0xff, 0xd8, 0xff, 0xd9],
+        $"http://127.0.0.1:{port}/image/upload", connectionRetryProgress: retryProgress);
+    await server;
+    Assert(status == 200, "图像 API 短暂不可用后没有重试成功");
+    Assert(retryCount > 0, "图像 API 短暂不可用时没有报告重试状态");
+}
+
+static async Task TestKeyboardEndpointDiscoveryAsync()
+{
+    var requests = new List<Uri>();
+    using var discovery = new KeyboardEndpointDiscovery(
+        new StubHttpMessageHandler(request =>
+        {
+            lock (requests) requests.Add(request.RequestUri!);
+            if (request.RequestUri!.Host == "192.0.2.54")
+                return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
+            throw new HttpRequestException("Host unavailable");
+        }),
+        () => [IPAddress.Parse("192.0.2.53"), IPAddress.Parse("192.0.2.54")],
+        TimeSpan.FromSeconds(1), TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
+
+    var resolved = await discovery.ResolveAsync("http://198.51.100.54/image/upload");
+    Assert(resolved == "http://192.0.2.54/image/upload", "没有发现新的键盘 API 地址");
+    Assert(requests.Any(uri => uri.Host == "198.51.100.54"), "没有先检查已保存的 API 地址");
+    Assert(requests.Any(uri => uri.Host == "192.0.2.54"), "没有扫描局域网候选地址");
+}
+
 static void Assert(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
+}
+
+sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> respond)
+    : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+        CancellationToken cancellationToken) => Task.FromResult(respond(request));
 }

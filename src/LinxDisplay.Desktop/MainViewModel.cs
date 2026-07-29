@@ -14,6 +14,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly SettingsStore _store = new();
     private readonly CodexRateLimitClient _codex = new();
     private readonly ImageApiClient _imageApi = new();
+    private readonly KeyboardEndpointDiscovery _endpointDiscovery = new();
     private readonly ISystemMonitorService _systemMonitor = PlatformServiceFactory.CreateSystemMonitor();
     private readonly IStartupManager _startup = PlatformServiceFactory.CreateStartupManager();
     private readonly PomodoroService _pomodoro;
@@ -46,6 +47,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Themes =
         [
             new("深空薄荷", CardTheme.DeepSpace),
+            new("深空橙", CardTheme.DeepSpaceOrange),
             new("明亮极简", CardTheme.MinimalLight),
             new("霓虹紫", CardTheme.NeonPurple),
             new("琥珀终端", CardTheme.AmberTerminal)
@@ -342,8 +344,24 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
+        Status = "正在检查键盘地址…";
+        var discoveryProgress = new Progress<int>(scanCount =>
+            Status = $"正在自动查找键盘地址（第 {scanCount} 次）…");
+        var resolvedEndpoint = await _endpointDiscovery.ResolveAsync(_settings.Endpoint,
+            scanProgress: discoveryProgress)
+            ?? throw new HttpRequestException("5 分钟内未找到键盘图像 API，请检查键盘和电脑是否在同一局域网。");
+        if (!string.Equals(resolvedEndpoint, _settings.Endpoint, StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.Endpoint = resolvedEndpoint;
+            SaveSettings();
+            OnPropertyChanged(nameof(Endpoint));
+        }
+
         Status = "正在推送到键盘…";
-        var statusCode = await _imageApi.UploadAsync(jpeg, _settings.Endpoint);
+        var retryProgress = new Progress<int>(retryCount =>
+            Status = $"图像 API 暂不可用，正在自动重试（第 {retryCount} 次）…");
+        var statusCode = await _imageApi.UploadAsync(jpeg, _settings.Endpoint,
+            connectionRetryProgress: retryProgress);
         _lastUploadedHash = hash;
         LastPush = $"最后推送：{DateTime.Now:M月d日 HH:mm:ss}";
         Status = $"推送成功（HTTP {statusCode}）";
@@ -467,6 +485,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         _timer.Stop();
         _imageApi.Dispose();
+        _endpointDiscovery.Dispose();
         _previewImage?.Dispose();
     }
 }

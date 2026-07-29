@@ -17,8 +17,14 @@ public sealed partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            desktop.ShutdownRequested += (_, _) => IsExiting = true;
             var window = new MainWindow();
             desktop.MainWindow = window;
+            if (desktop is IActivatableLifetime activatableLifetime)
+                activatableLifetime.Activated += (_, args) =>
+                {
+                    if (args.Kind == ActivationKind.Reopen) ShowMainWindow();
+                };
             if (desktop.Args?.Contains("--background", StringComparer.OrdinalIgnoreCase) != true)
                 window.Show();
         }
