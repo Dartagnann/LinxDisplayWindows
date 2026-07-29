@@ -112,7 +112,7 @@ public sealed class SettingsStore
                 SafeAreaHeight = Math.Clamp(GetInt32(root, "SafeAreaHeight", 56), 44, 80),
                 JpegQuality = Math.Clamp(GetInt32(root, "JpegQuality", 90), 50, 100),
                 DisplayMode = mode,
-                CardTheme = (CardTheme)Math.Clamp(GetInt32(root, "CardTheme", 0), 0, 3),
+                CardTheme = (CardTheme)Math.Clamp(GetInt32(root, "CardTheme", 0), 0, 4),
                 CustomImagePath = GetString(root, "CustomImagePath"),
                 CustomImageName = GetString(root, "CustomImageName")
             };

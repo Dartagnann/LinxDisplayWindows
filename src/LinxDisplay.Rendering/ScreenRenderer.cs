@@ -18,6 +18,7 @@ public static class ScreenThemes
 {
     public static ScreenPalette Get(CardTheme theme) => theme switch
     {
+        CardTheme.DeepSpaceOrange => Palette("100b08", "21140e", "160d09", "4a2c1c", "ff8a3d", "fbbf24", "fff7ed", "fdba74", "9a6b4a"),
         CardTheme.MinimalLight => Palette("eef2f7", "ffffff", "f3f6fa", "cbd5e1", "0f766e", "2563eb", "0f172a", "475569", "64748b"),
         CardTheme.NeonPurple => Palette("090617", "17102b", "100b20", "49316e", "c084fc", "22d3ee", "faf5ff", "d8b4fe", "8b7ba8"),
         CardTheme.AmberTerminal => Palette("0b0a07", "1a160d", "100e08", "5b4720", "fbbf24", "fb923c", "fff7d6", "d6b96c", "8c7540"),
@@ -26,6 +27,7 @@ public static class ScreenThemes
 
     public static string DisplayName(CardTheme theme) => theme switch
     {
+        CardTheme.DeepSpaceOrange => "深空橙",
         CardTheme.MinimalLight => "明亮极简",
         CardTheme.NeonPurple => "霓虹紫",
         CardTheme.AmberTerminal => "琥珀终端",
