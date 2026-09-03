@@ -134,7 +134,7 @@ public sealed class CodexRateLimitClient
         throw new InvalidOperationException($"Codex 返回错误：{message ?? "未知错误"}");
     }
 
-    private static UsageSnapshot ParseSnapshot(JsonElement result)
+    internal static UsageSnapshot ParseSnapshot(JsonElement result)
     {
         JsonElement limits = default;
         var hasLimits = result.TryGetProperty("rateLimitsByLimitId", out var byId)
@@ -152,14 +152,13 @@ public sealed class CodexRateLimitClient
             windows.Add(secondary);
         if (windows.Count == 0) throw new InvalidOperationException("Codex 返回了无法识别的用量数据。");
 
-        var selected = windows.MaxBy(GetWindowMinutes);
-        var usedPercent = selected.TryGetProperty("usedPercent", out var used)
-            ? (int)Math.Round(used.GetDouble())
-            : throw new InvalidOperationException("Codex 返回的用量数据缺少 usedPercent。");
-        var windowMinutes = GetWindowMinutes(selected);
-        DateTimeOffset? resetDate = null;
-        if (selected.TryGetProperty("resetsAt", out var reset) && reset.TryGetInt64(out var seconds))
-            resetDate = DateTimeOffset.FromUnixTimeSeconds(seconds);
+        var parsedWindows = windows.Select(ParseWindow).Where(window => window is not null)
+            .Cast<UsageWindow>().ToArray();
+        if (parsedWindows.Length == 0)
+            throw new InvalidOperationException("Codex 返回的用量数据缺少 usedPercent。");
+        var fiveHourWindow = parsedWindows.FirstOrDefault(window => window.WindowMinutes == 300);
+        var weeklyWindow = parsedWindows.FirstOrDefault(window => window.WindowMinutes >= 10_080);
+        var selected = fiveHourWindow ?? parsedWindows.MaxBy(window => window.WindowMinutes)!;
 
         var resetCount = 0;
         if (result.TryGetProperty("rateLimitResetCredits", out var credits)
@@ -169,8 +168,19 @@ public sealed class CodexRateLimitClient
             resetCount = Math.Max(0, parsedCount);
 
         var planType = limits.TryGetProperty("planType", out var plan) ? plan.GetString() : null;
-        return new UsageSnapshot(Math.Clamp(100 - usedPercent, 0, 100), resetDate,
-            windowMinutes == 0 ? null : windowMinutes, resetCount, planType);
+        return new UsageSnapshot(selected.RemainingPercent, selected.ResetDate,
+            selected.WindowMinutes, resetCount, planType, fiveHourWindow, weeklyWindow);
+    }
+
+    private static UsageWindow? ParseWindow(JsonElement window)
+    {
+        if (!window.TryGetProperty("usedPercent", out var used)) return null;
+        var windowMinutes = GetWindowMinutes(window);
+        DateTimeOffset? resetDate = null;
+        if (window.TryGetProperty("resetsAt", out var reset) && reset.TryGetInt64(out var seconds))
+            resetDate = DateTimeOffset.FromUnixTimeSeconds(seconds);
+        return new UsageWindow(Math.Clamp(100 - (int)Math.Round(used.GetDouble()), 0, 100),
+            resetDate, windowMinutes);
     }
 
     private static int GetWindowMinutes(JsonElement window) =>

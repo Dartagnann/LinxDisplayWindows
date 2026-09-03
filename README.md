@@ -2,9 +2,23 @@
 
 把 Codex 用量、番茄钟、CPU/内存/网络状态或自定义图片渲染为 `142 × 428` JPEG，并通过局域网推送到 Linx68 键盘左侧屏幕。
 
+本仓库由 [Dartagnann](https://github.com/Dartagnann) 基于 [NCZkevin/LinxDisplayWindows](https://github.com/NCZkevin/LinxDisplayWindows) 独立维护。仓库保留原项目来源标识，但版本开发、问题处理和发布均在本仓库进行，不代表向上游项目提交改动。
+
 <p align="center">
   <img src="docs/LinxDisplay-promo-v2.png" width="100%" alt="LinxDisplay 产品宣传图：Codex 用量、番茄钟、系统监控与多主题键盘屏幕">
 </p>
+
+## 本维护版改动
+
+- Windows、macOS、Linux 的 Avalonia 跨平台版新增“深空橙”主题，与原有深空薄荷等主题并存。
+- Codex 用量提供“周额度”和“5小时 + 周额度”两种显示模式，可在应用中独立选择。
+- Windows、macOS、Linux 的 Avalonia 跨平台版会在键盘局域网地址变化时自动发现新地址、保存并继续推送。
+- Windows、macOS、Linux 的 Avalonia 跨平台版会在键盘 API 暂时离线或启动较慢时自动重试，最长等待 5 分钟。
+- macOS 修复了从 Dock 退出、隐藏后点击 Dock 图标重新打开窗口的行为。
+
+上述改动不包含保留用于回归对照的旧版 Windows WinForms 实现。
+
+完整变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 平台状态
 
@@ -18,11 +32,11 @@
 
 ## 功能
 
-- Codex 用量：显示当前周期剩余、重置次数、重置时间和电脑本地时间。
+- Codex 用量：“Codex 周额度”保留原单周期布局；“Codex 5小时 + 周额度”同时显示两个周期的剩余比例和重置时间。两种布局均保留可用重置次数和电脑本地时间。
 - 番茄钟：任务名称、专注/短休/长休时长，支持暂停、继续、跳过和重置。
 - 系统监控：CPU、内存、下载/上传速度与系统运行时间。
 - 自定义图片：自动居中裁切，并为键盘状态栏保留 44–80px 顶部安全区。
-- 五套共享主题：深空薄荷、深空橙、明亮极简、霓虹紫、琥珀终端。
+- Avalonia 跨平台版提供五套主题：深空薄荷、深空橙、明亮极简、霓虹紫、琥珀终端。
 - 动态预览与定时推送，图片始终为 `142 × 428` JPEG 且不超过 512KB。
 - 已保存的图像 API 地址失效时，自动发现同一局域网内的键盘并更新地址后继续推送。
 - Windows/macOS 关闭窗口后可继续在系统托盘运行；三平台均可配置登录时启动。
@@ -30,7 +44,7 @@
 
 ## 下载
 
-- 从 [GitHub Releases](https://github.com/NCZkevin/LinxDisplayWindows/releases/latest) 下载最新正式版，提供 Windows、macOS Apple Silicon、macOS Intel 和 Linux 文件。
+- 本维护版的安装包统一发布在 [Dartagnann/LinxDisplayWindows Releases](https://github.com/Dartagnann/LinxDisplayWindows/releases)。没有可用安装包时，可按下方说明从源码运行。
 - M1/M2/M3/M4/M5 Mac 选择 `macOS-AppleSilicon`，Intel Mac 选择 `macOS-Intel`；Windows 用户选择 `Windows-x64`。
 - 普通桌面软件应放在 GitHub Releases，而不是 Packages；Packages 主要用于 NuGet、容器等供其他软件依赖的制品。
 
@@ -52,7 +66,7 @@
 | 番茄钟及实时状态、操作后立即推送 | 支持 | 支持 |
 | CPU/内存/网络监控及动态推送周期 | 支持 | 支持，并允许 2–60 秒自定义 |
 | 自定义图片（含 GIF 首帧） | 支持 | 支持 |
-| 五套卡片样式、安全区、JPEG 质量 | 支持 | 支持 |
+| 卡片样式、安全区、JPEG 质量 | 四套主题 | 五套主题（含深空橙） |
 | 系统托盘打开、立即推送、退出 | 支持 | 支持 |
 | 登录时自动启动、旧设置迁移 | Windows | Windows / macOS / Linux |
 
@@ -62,7 +76,9 @@
 
 安装 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) 后执行：
 
-```powershell
+```bash
+git clone https://github.com/Dartagnann/LinxDisplayWindows.git
+cd LinxDisplayWindows
 dotnet restore LinxDisplay.CrossPlatform.slnx
 dotnet run --project src/LinxDisplay.Desktop/LinxDisplay.Desktop.csproj
 ```
@@ -91,7 +107,7 @@ export CODEX_CLI_PATH=/path/to/codex
 
 ## 验证
 
-跨平台冒烟测试覆盖五套主题的 Codex、番茄钟、系统监控卡片，JPEG 编解码、番茄钟状态切换以及当前系统的 CPU/内存采样：
+跨平台冒烟测试覆盖五套主题的 Codex、番茄钟、系统监控卡片，JPEG 编解码、番茄钟状态切换、图像 API 重试、键盘地址发现以及当前系统的 CPU/内存采样：
 
 ```powershell
 dotnet run --project tests/LinxDisplay.CrossPlatform.Tests --configuration Release

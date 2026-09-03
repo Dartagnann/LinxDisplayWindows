@@ -18,7 +18,7 @@ public static class ScreenThemes
 {
     public static ScreenPalette Get(CardTheme theme) => theme switch
     {
-        CardTheme.DeepSpaceOrange => Palette("100b08", "21140e", "160d09", "4a2c1c", "ff8a3d", "fbbf24", "fff7ed", "fdba74", "9a6b4a"),
+        CardTheme.DeepSpaceOrange => Palette("080b12", "111827", "0b1220", "26344a", "ff8a3d", "fbbf24", "f8fafc", "94a3b8", "64748b"),
         CardTheme.MinimalLight => Palette("eef2f7", "ffffff", "f3f6fa", "cbd5e1", "0f766e", "2563eb", "0f172a", "475569", "64748b"),
         CardTheme.NeonPurple => Palette("090617", "17102b", "100b20", "49316e", "c084fc", "22d3ee", "faf5ff", "d8b4fe", "8b7ba8"),
         CardTheme.AmberTerminal => Palette("0b0a07", "1a160d", "100e08", "5b4720", "fbbf24", "fb923c", "fff7d6", "d6b96c", "8c7540"),
@@ -57,16 +57,28 @@ public static class ScreenRenderer
             DrawHeader(canvas, card, "CODEX", "实时", colors.Accent, colors);
             DrawLine(canvas, card.Left + 9, card.Top + 38, card.Right - 9, card.Top + 38, colors.Border);
 
+            if (settings.DisplayMode == DisplayMode.CodexDualWindow
+                && snapshot.FiveHourWindow is not null && snapshot.WeeklyWindow is not null)
+            {
+                DrawDualUsage(canvas, card, snapshot, colors, currentTime);
+                return Encode(bitmap, settings.JpegQuality);
+            }
+
+            var singleWindow = settings.DisplayMode == DisplayMode.Codex
+                ? snapshot.WeeklyWindow
+                : null;
+            var remainingPercent = singleWindow?.RemainingPercent ?? snapshot.RemainingPercent;
             var top = card.Top + 49;
-            DrawText(canvas, snapshot.WindowTitle, 10, true, colors.SecondaryText,
+            DrawText(canvas, singleWindow?.Title ?? snapshot.WindowTitle, 10, true, colors.SecondaryText,
                 new SKRect(card.Left + 9, top, card.Right - 9, top + 18), SKTextAlign.Center);
-            DrawText(canvas, snapshot.RemainingPercent.ToString(), 38, true, colors.PrimaryText,
+            DrawText(canvas, remainingPercent.ToString(), 38, true, colors.PrimaryText,
                 new SKRect(card.Left + 5, top + 18, card.Right - 28, top + 73), SKTextAlign.Right);
             DrawText(canvas, "%", 11, true, colors.Accent,
                 new SKRect(card.Right - 25, top + 42, card.Right - 8, top + 62), SKTextAlign.Left);
             DrawProgress(canvas, new SKRect(card.Left + 9, top + 71, card.Right - 9, top + 79),
-                snapshot.RemainingPercent / 100d, colors.Accent, colors.Border);
-            DrawText(canvas, snapshot.WindowDescription, 9, false, colors.TertiaryText,
+                remainingPercent / 100d, colors.Accent, colors.Border);
+            DrawText(canvas, singleWindow?.Description ?? snapshot.WindowDescription, 9, false,
+                colors.TertiaryText,
                 new SKRect(card.Left + 9, top + 83, card.Right - 9, top + 101), SKTextAlign.Center);
 
             var reset = new SKRect(card.Left + 9, card.Top + 163, card.Right - 9, card.Top + 233);
@@ -79,7 +91,7 @@ public static class ScreenRenderer
                 new SKRect(reset.Right - 30, reset.Top + 37, reset.Right - 10, reset.Top + 58), SKTextAlign.Right);
 
             var now = (currentTime ?? DateTimeOffset.Now).ToLocalTime();
-            var resetDate = snapshot.ResetDate?.ToLocalTime();
+            var resetDate = (singleWindow?.ResetDate ?? snapshot.ResetDate)?.ToLocalTime();
             var bottom = card.Bottom - 15;
             DrawText(canvas, resetDate is null ? "重置时间未知" : $"下次重置 {resetDate:M/d HH:mm}",
                 8, false, colors.TertiaryText,
@@ -93,6 +105,61 @@ public static class ScreenRenderer
         }
         return Encode(bitmap, settings.JpegQuality);
     }
+
+    private static void DrawDualUsage(SKCanvas canvas, SKRect card, UsageSnapshot snapshot,
+        ScreenPalette colors, DateTimeOffset? currentTime = null)
+    {
+        var fiveHour = snapshot.FiveHourWindow!;
+        var weekly = snapshot.WeeklyWindow!;
+        var top = card.Top + 47;
+        DrawText(canvas, fiveHour.Title, 10, true, colors.SecondaryText,
+            new SKRect(card.Left + 9, top, card.Right - 9, top + 17), SKTextAlign.Center);
+        DrawText(canvas, fiveHour.RemainingPercent.ToString(), 34, true, colors.PrimaryText,
+            new SKRect(card.Left + 5, top + 15, card.Right - 28, top + 62), SKTextAlign.Right);
+        DrawText(canvas, "%", 11, true, colors.Accent,
+            new SKRect(card.Right - 25, top + 34, card.Right - 8, top + 54), SKTextAlign.Left);
+        DrawProgress(canvas, new SKRect(card.Left + 9, top + 65, card.Right - 9, top + 72),
+            fiveHour.RemainingPercent / 100d, colors.Accent, colors.Border);
+        DrawText(canvas, FormatReset(fiveHour.ResetDate), 8, false, colors.TertiaryText,
+            new SKRect(card.Left + 7, top + 78, card.Right - 7, top + 93), SKTextAlign.Center);
+
+        var weeklyBox = new SKRect(card.Left + 9, card.Top + 147, card.Right - 9, card.Top + 218);
+        DrawBox(canvas, weeklyBox, colors);
+        DrawText(canvas, weekly.Title, 9, true, colors.SecondaryText,
+            new SKRect(weeklyBox.Left + 9, weeklyBox.Top + 4, weeklyBox.Right - 9, weeklyBox.Top + 21),
+            SKTextAlign.Center);
+        DrawText(canvas, $"{weekly.RemainingPercent}%", 16, true, colors.PrimaryText,
+            new SKRect(weeklyBox.Left + 9, weeklyBox.Top + 19, weeklyBox.Right - 9, weeklyBox.Top + 42),
+            SKTextAlign.Center);
+        DrawProgress(canvas, new SKRect(weeklyBox.Left + 9, weeklyBox.Top + 43,
+                weeklyBox.Right - 9, weeklyBox.Top + 49), weekly.RemainingPercent / 100d,
+            colors.SecondaryAccent, colors.Border);
+        DrawText(canvas, FormatReset(weekly.ResetDate), 7, false, colors.TertiaryText,
+            new SKRect(weeklyBox.Left + 9, weeklyBox.Top + 52, weeklyBox.Right - 9, weeklyBox.Bottom - 3),
+            SKTextAlign.Center);
+
+        var credits = new SKRect(card.Left + 9, card.Top + 226, card.Right - 9, card.Top + 255);
+        DrawBox(canvas, credits, colors);
+        DrawText(canvas, "可用重置", 8, true, colors.SecondaryText,
+            new SKRect(credits.Left + 9, credits.Top + 4, credits.Left + 70, credits.Bottom - 4),
+            SKTextAlign.Left);
+        DrawText(canvas, $"{snapshot.AvailableResetCount} 次", 11, true, colors.Accent,
+            new SKRect(credits.Left + 65, credits.Top + 3, credits.Right - 9, credits.Bottom - 3),
+            SKTextAlign.Right);
+
+        var now = (currentTime ?? DateTimeOffset.Now).ToLocalTime();
+        var bottom = card.Bottom - 15;
+        DrawText(canvas, "当前时间", 9, true, colors.TertiaryText,
+            new SKRect(card.Left + 9, bottom - 76, card.Right - 9, bottom - 59), SKTextAlign.Center);
+        DrawText(canvas, now.ToString("M月d日"), 17, true, colors.PrimaryText,
+            new SKRect(card.Left + 5, bottom - 57, card.Right - 5, bottom - 33), SKTextAlign.Center);
+        DrawText(canvas, now.ToString("HH:mm"), 22, true, colors.Accent,
+            new SKRect(card.Left + 5, bottom - 32, card.Right - 5, bottom), SKTextAlign.Center);
+    }
+
+    private static string FormatReset(DateTimeOffset? resetDate) => resetDate is null
+        ? "重置时间未知"
+        : $"重置 {resetDate.Value.ToLocalTime():M/d HH:mm}";
 
     public static byte[] RenderPomodoro(PomodoroSnapshot snapshot, AppSettings settings,
         DateTimeOffset? currentTime = null)
