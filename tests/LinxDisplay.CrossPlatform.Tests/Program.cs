@@ -9,9 +9,17 @@ using System.Text.Json;
 var checks = new List<(string Name, Action Run)>();
 foreach (var theme in Enum.GetValues<CardTheme>())
 {
-    checks.Add(($"{theme} Codex renderer", () => AssertJpeg(ScreenRenderer.RenderUsage(
-        new UsageSnapshot(91, DateTimeOffset.Now.AddDays(5), 10_080, 4, "plus"),
+    checks.Add(($"{theme} Codex weekly renderer", () => AssertJpeg(ScreenRenderer.RenderUsage(
+        new UsageSnapshot(76, DateTimeOffset.Now.AddHours(3), 300, 4, "plus",
+            new UsageWindow(76, DateTimeOffset.Now.AddHours(3), 300),
+            new UsageWindow(91, DateTimeOffset.Now.AddDays(5), 10_080)),
         Settings(theme), new DateTimeOffset(2026, 7, 18, 2, 14, 0, TimeSpan.FromHours(8))))));
+    checks.Add(($"{theme} Codex dual-window renderer", () => AssertJpeg(ScreenRenderer.RenderUsage(
+        new UsageSnapshot(76, DateTimeOffset.Now.AddHours(3), 300, 4, "plus",
+            new UsageWindow(76, DateTimeOffset.Now.AddHours(3), 300),
+            new UsageWindow(91, DateTimeOffset.Now.AddDays(5), 10_080)),
+        Settings(theme, DisplayMode.CodexDualWindow),
+        new DateTimeOffset(2026, 7, 18, 2, 14, 0, TimeSpan.FromHours(8))))));
     checks.Add(($"{theme} Pomodoro renderer", () => AssertJpeg(ScreenRenderer.RenderPomodoro(
         new PomodoroSnapshot(PomodoroPhase.Focus, PomodoroPhase.Focus, "跨平台开发",
             TimeSpan.FromMinutes(18), TimeSpan.FromMinutes(25), 3, DateTimeOffset.Now.AddMinutes(18)),
@@ -20,6 +28,28 @@ foreach (var theme in Enum.GetValues<CardTheme>())
         new SystemSnapshot(42, 68, 11UL << 30, 16UL << 30, 2.5 * 1024 * 1024, 384 * 1024,
             TimeSpan.FromHours(53), DateTimeOffset.Now), Settings(theme)))));
 }
+
+checks.Add(("Codex 5-hour and weekly windows", () =>
+{
+    using var document = JsonDocument.Parse("""
+        {
+          "rateLimits": {
+            "planType": "plus",
+            "primary": { "usedPercent": 35, "windowDurationMins": 10080, "resetsAt": 1786500000 },
+            "secondary": { "usedPercent": 20, "windowDurationMins": 300, "resetsAt": 1786000000 }
+          },
+          "rateLimitResetCredits": { "availableCount": 2 }
+        }
+        """);
+    var snapshot = CodexRateLimitClient.ParseSnapshot(document.RootElement);
+    Assert(snapshot.RemainingPercent == 80 && snapshot.WindowMinutes == 300,
+        "没有优先显示恢复后的 5 小时窗口");
+    Assert(snapshot.FiveHourWindow?.RemainingPercent == 80,
+        "5 小时窗口解析错误");
+    Assert(snapshot.WeeklyWindow?.RemainingPercent == 65,
+        "周窗口解析错误");
+    Assert(snapshot.AvailableResetCount == 2, "可用重置次数解析错误");
+}));
 
 checks.Add(("Pomodoro transitions", () =>
 {
@@ -127,7 +157,13 @@ foreach (var check in checks)
 Console.WriteLine($"{checks.Count - failures}/{checks.Count} checks passed");
 return failures == 0 ? 0 : 1;
 
-static AppSettings Settings(CardTheme theme) => new() { CardTheme = theme, SafeAreaHeight = 56, JpegQuality = 90 };
+static AppSettings Settings(CardTheme theme, DisplayMode mode = DisplayMode.Codex) => new()
+{
+    CardTheme = theme,
+    DisplayMode = mode,
+    SafeAreaHeight = 56,
+    JpegQuality = 90
+};
 
 static void AssertJpeg(byte[] data)
 {

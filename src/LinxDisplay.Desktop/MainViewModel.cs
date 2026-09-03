@@ -39,7 +39,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         Modes =
         [
-            new("Codex 用量", DisplayMode.Codex),
+            new("Codex 周额度", DisplayMode.Codex),
+            new("Codex 5小时 + 周额度", DisplayMode.CodexDualWindow),
             new("番茄钟", DisplayMode.Pomodoro),
             new("系统监控", DisplayMode.SystemMonitor),
             new("自定义图片", DisplayMode.CustomImage)
@@ -214,7 +215,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string LastPush { get => _lastPush; private set => Set(ref _lastPush, value); }
     public string CustomImageName => string.IsNullOrWhiteSpace(_settings.CustomImageName) ? "尚未选择图片" : _settings.CustomImageName;
     public string JpegQualityText => $"{JpegQuality}%";
-    public bool IsCodexMode => _settings.DisplayMode == DisplayMode.Codex;
+    public bool IsCodexMode => IsCodexDisplayMode(_settings.DisplayMode);
     public bool IsPomodoroMode => _settings.DisplayMode == DisplayMode.Pomodoro;
     public bool IsSystemMode => _settings.DisplayMode == DisplayMode.SystemMonitor;
     public bool IsCustomMode => _settings.DisplayMode == DisplayMode.CustomImage;
@@ -263,7 +264,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private async Task ActivateModeAsync()
     {
         RenderPreview();
-        if (_settings.DisplayMode == DisplayMode.Codex)
+        if (IsCodexDisplayMode(_settings.DisplayMode))
             await RefreshCodexAsync(upload: true, forceUpload: false);
         else if (_settings.DisplayMode == DisplayMode.SystemMonitor)
         {
@@ -287,7 +288,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             Status = upload ? "正在刷新并推送…" : "正在刷新…";
-            if (_settings.DisplayMode == DisplayMode.Codex)
+            if (IsCodexDisplayMode(_settings.DisplayMode))
             {
                 _lastCodexRefresh = DateTimeOffset.Now;
                 _usage = await _codex.FetchAsync(_settings.CodexCliPath);
@@ -315,7 +316,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task PushCurrentAsync()
     {
-        if (_settings.DisplayMode == DisplayMode.Codex)
+        if (IsCodexDisplayMode(_settings.DisplayMode))
             await RefreshCodexAsync(upload: true, forceUpload: true);
         else
             await PushAsync(force: true);
@@ -372,7 +373,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         var now = DateTimeOffset.Now;
         if (_pomodoro.Tick(now)) SavePomodoro();
 
-        if (_settings.DisplayMode == DisplayMode.Codex)
+        if (IsCodexDisplayMode(_settings.DisplayMode))
         {
             var action = AutomaticSyncPlanner.ForCodex(
                 now, _lastCodexRefresh, _lastPushAttempt, _settings.CodexRefreshSeconds);
@@ -460,6 +461,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void SaveSettings() => _store.Save(_settings);
     private void SavePomodoro() => _store.SavePomodoro(_pomodoro.State);
+    private static bool IsCodexDisplayMode(DisplayMode mode) =>
+        mode is DisplayMode.Codex or DisplayMode.CodexDualWindow;
+
     private void RaiseModeProperties()
     {
         OnPropertyChanged(nameof(SelectedMode));
