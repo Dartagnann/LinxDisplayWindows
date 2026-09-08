@@ -71,12 +71,7 @@ plutil -lint "$app/Contents/Info.plist"
 
 # Ad-hoc signing keeps the bundle internally consistent. A future Developer ID
 # certificate plus notarization is still required to avoid all Gatekeeper prompts.
-while IFS= read -r -d '' binary; do
-  if file "$binary" | grep -q "Mach-O"; then
-    codesign --force --sign - "$binary"
-  fi
-done < <(find "$app/Contents/MacOS" -type f -print0)
-codesign --force --sign - "$app"
+codesign --force --deep --sign - "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 
 ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"

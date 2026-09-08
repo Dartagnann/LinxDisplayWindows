@@ -50,7 +50,8 @@ public sealed class KeyboardEndpointDiscovery : IDisposable
                 && configuredUri.Scheme != Uri.UriSchemeHttps))
             throw new InvalidOperationException("图像 API 地址无效。");
 
-        if (await IsKeyboardApiAsync(configuredUri, cancellationToken))
+        if (IsPrivateNetworkUri(configuredUri)
+            && await IsKeyboardApiAsync(configuredUri, cancellationToken))
             return endpoint;
 
         var deadline = DateTimeOffset.UtcNow + _discoveryWindow;
@@ -73,6 +74,7 @@ public sealed class KeyboardEndpointDiscovery : IDisposable
     private async Task<Uri?> ScanAsync(Uri configuredUri, CancellationToken cancellationToken)
     {
         var candidates = _candidateProvider()
+            .Where(IsPrivateIpv4Address)
             .Where(address => !string.Equals(address.ToString(), configuredUri.Host,
                 StringComparison.OrdinalIgnoreCase))
             .Select(address => new UriBuilder(configuredUri) { Host = address.ToString() }.Uri)
@@ -151,7 +153,7 @@ public sealed class KeyboardEndpointDiscovery : IDisposable
             .Select(unicast => unicast.Address)
             .Where(address => address.AddressFamily == AddressFamily.InterNetwork
                               && !IPAddress.IsLoopback(address)
-                              && !address.ToString().StartsWith("169.254.", StringComparison.Ordinal))
+                              && IsPrivateIpv4Address(address))
             .Select(address => address.GetAddressBytes())
             .Where(bytes => bytes.Length == 4)
             .Select(bytes => (bytes[0], bytes[1], bytes[2]))
@@ -162,6 +164,18 @@ public sealed class KeyboardEndpointDiscovery : IDisposable
             .SelectMany(subnet => Enumerable.Range(1, 254)
                 .Select(host => new IPAddress([subnet.Item1, subnet.Item2, subnet.Item3, (byte)host])))
             .ToArray();
+    }
+
+    private static bool IsPrivateNetworkUri(Uri uri) =>
+        IPAddress.TryParse(uri.Host, out var address) && IsPrivateIpv4Address(address);
+
+    private static bool IsPrivateIpv4Address(IPAddress address)
+    {
+        if (address.AddressFamily != AddressFamily.InterNetwork) return false;
+        var bytes = address.GetAddressBytes();
+        return bytes[0] == 10
+               || bytes[0] == 172 && bytes[1] is >= 16 and <= 31
+               || bytes[0] == 192 && bytes[1] == 168;
     }
 
     public void Dispose() => _client.Dispose();

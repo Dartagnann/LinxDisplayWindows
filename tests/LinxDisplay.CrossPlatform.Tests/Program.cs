@@ -212,17 +212,23 @@ static async Task TestKeyboardEndpointDiscoveryAsync()
         new StubHttpMessageHandler(request =>
         {
             lock (requests) requests.Add(request.RequestUri!);
-            if (request.RequestUri!.Host == "192.0.2.54")
+            if (request.RequestUri!.Host is "198.18.0.18" or "10.0.0.54")
                 return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
             throw new HttpRequestException("Host unavailable");
         }),
-        () => [IPAddress.Parse("192.0.2.53"), IPAddress.Parse("192.0.2.54")],
+        () =>
+        [
+            IPAddress.Parse("198.18.0.1"),
+            IPAddress.Parse("10.0.0.53"),
+            IPAddress.Parse("10.0.0.54")
+        ],
         TimeSpan.FromSeconds(1), TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
 
-    var resolved = await discovery.ResolveAsync("http://198.51.100.54/image/upload");
-    Assert(resolved == "http://192.0.2.54/image/upload", "没有发现新的键盘 API 地址");
-    Assert(requests.Any(uri => uri.Host == "198.51.100.54"), "没有先检查已保存的 API 地址");
-    Assert(requests.Any(uri => uri.Host == "192.0.2.54"), "没有扫描局域网候选地址");
+    var resolved = await discovery.ResolveAsync("http://198.18.0.18/image/upload");
+    Assert(resolved == "http://10.0.0.54/image/upload", "没有发现新的键盘 API 地址");
+    Assert(requests.All(uri => !uri.Host.StartsWith("198.18.", StringComparison.Ordinal)),
+        "不应探测代理使用的基准测试网段");
+    Assert(requests.Any(uri => uri.Host == "10.0.0.54"), "没有扫描局域网候选地址");
 }
 
 static void Assert(bool condition, string message)

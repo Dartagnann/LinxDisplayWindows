@@ -53,14 +53,14 @@ jobs:
             rid: osx-arm64
             asset: macOS-AppleSilicon
             extension: zip
-            single_file: true
-            extract_native: true
+            single_file: false
+            extract_native: false
           - os: macos-latest
             rid: osx-x64
             asset: macOS-Intel
             extension: zip
-            single_file: true
-            extract_native: true
+            single_file: false
+            extract_native: false
           - os: ubuntu-latest
             rid: linux-x64
             asset: Linux-x64

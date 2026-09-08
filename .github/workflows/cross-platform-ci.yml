@@ -73,9 +73,7 @@ jobs:
           --configuration Release
           --runtime ${{ matrix.rid }}
           --self-contained true
-          -p:PublishSingleFile=true
-          -p:EnableCompressionInSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:PublishSingleFile=false
           -p:DebugType=None
           -p:DebugSymbols=false
           --output .release/publish
